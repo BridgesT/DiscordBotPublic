@@ -1,0 +1,93 @@
+{
+    "acrid":{
+        "misc":      ["Poison", "Blight"],
+        "primary":   ["Vicious Wounds"],
+        "secondary": ["Neurotoxin", "Ravenous Bite"],
+        "utility":   ["Caustic Leap", "Frenzied Leap"],
+        "special":   ["Epidemic"]
+    },
+    "artificer":{
+        "misc":      ["ENV Suit"],
+        "primary":   ["Flame Bolt", "Plasma Bolt"],
+        "secondary": ["Charged Nano-Bomb", "Cast Nano-Spear"],
+        "utility":   ["Snapfreeze"],
+        "special":   ["Flamethrower", "Ion Surge"]
+    },
+    "bandit":{
+        "misc":      ["Backstab"],
+        "primary":   ["Burst", "Blast"],
+        "secondary": ["Serrated Dagger", "Serrated Shiv"],
+        "utility":   ["Smoke Bomb"],
+        "special":   ["Lights Out", "Desperado"]
+    },
+    "captain":{
+        "misc":      ["Defensive Microbots"],
+        "primary":   ["Vulcan Shotgun"],
+        "secondary": ["Power Tazer"],
+        "utility":   ["Orbital Probe", "OGM-72 'DIABLO' Strike"],
+        "special":   ["Beacon: Healing", "Beacon: Shocking", "Beacon: Resupply", "Beacon: Hacking"]
+    },
+    "commando":{
+        "misc":      [""],
+        "primary":   ["Double Tap"],
+        "secondary": ["Phase Round", "Phase Blast"],
+        "utility":   ["Tactical Dive", "Tactical Slide"],
+        "special":   ["Suppressive Fire", "Frag Grenade"]
+    },
+    "engineer":{
+        "misc":      [""],
+        "primary":   ["Bouncing Grenades"],
+        "secondary": ["Pressure Mines", "Spider Mines"],
+        "utility":   ["Bubble Shield", "Thermal Harpoons"],
+        "special":   ["TR12 Gauss Auto-Turret", "TR58 Carbonizer Turret"]
+    },
+    "huntress":{
+        "misc":      [""],
+        "primary":   ["Strafe", "Flurry"],
+        "secondary": ["Laser Glaive"],
+        "utility":   ["Blink", "Phase Blink"],
+        "special":   ["Arrow Rain", "Ballista"]
+    },
+    "loader":{
+        "misc":      ["Scrap Barrier"],
+        "primary":   ["Knuckleboom"],
+        "secondary": ["Grapple Fist", "Spiked Fist  "],
+        "utility":   ["Charged Gauntlet", "Thunder Gauntlet"],
+        "special":   ["M551 Pylon", "Thunderslam"]
+    },
+    "mercenary":{
+        "misc":      ["Cybernetic Enhancements"],
+        "primary":   ["Laser Sword"],
+        "secondary": ["Whirlwind", "Rising Thunder"],
+        "utility":   ["Blinding Assault", "Focused Assault"],
+        "special":   ["Eviscerate", "Slicing Winds"]
+    },
+    "mul_t":{
+        "misc":      [""],
+        "primary":   ["Auto-Nailgun", "Rebar Puncher", "Scrap Launcher", "Power-Saw"],
+        "secondary": ["Blast Canister"],
+        "utility":   ["Transport Mode"],
+        "special":   ["Retool", "Power Mode"]
+    },
+    "rex":{
+        "misc":      ["Natural Toxins"],
+        "primary":   ["DIRECTIVE: Inject"],
+        "secondary": ["DIRECTIVE: Drill", "Seed Barrage"],
+        "utility":   ["DIRECTIVE: Disperse", "Bramble Volley"],
+        "special":   ["DIRECTIVE: Harvest", "Tangling Growth"]
+    },
+    "railgunner":{
+        "misc":      ["Magnetic Accelerator"],
+        "primary":   ["XQR Smart Round System"],
+        "secondary": ["M99 Sniper", "HH44 Marksman"],
+        "utility":   ["Concussion Device", "Polar Field Device"],
+        "special":   ["Supercharge", "Cryocharge"]
+    },
+    "voidfiend":{
+        "misc":      ["Void Corruption"],
+        "primary":   ["Drown"],
+        "secondary": ["Flood"],
+        "utility":   ["Trespass"],
+        "special":   ["Suppress"]
+    }
+}
