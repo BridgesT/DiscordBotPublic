@@ -5,23 +5,33 @@ const cron = require('cron');
 const config = require('./config.json');
 const client = new discord.Client({ intents: ["GUILDS", "GUILD_MESSAGES", "GUILD_MEMBERS"] })
 const token = config.token;
+const RAMISQuery = require('./RAMISQuery');
+const q = new RAMISQuery();
 
-let fs = require("fs");
+let members;
+let m_query = "insert into QUOTE (MEMBER_ID, QUOTE_TEXT) VALUES (472195478423863307, 'test insert')";
 
-const { stringify } = require('querystring');
+function query(query){
+    return new Promise(async () =>{
+        await q.doQuery(query);
+    });
+}
+//console.log(members)
+const fs = require("fs");
 
 //load json files
-let riskRollsJSON = require('./risk_rolls.json');
-let quotesJSON = require('./quotes.json');
-let riskLoadouts = require('./riskLoadouts.json');
+const riskRollsJSON = require('./risk_rolls.json');
+const quotesJSON = require('./quotes.json');
+const riskLoadouts = require('./riskLoadouts.json');
 let birthdaysJson = require('./birthdays.json');
-let cronTime = require('./cronjobLookup.json');
-const { doesNotThrow } = require('assert');
+const cronTime = require('./cronjobLookup.json');
+const TableGenerator = require("./TableGenerator");
+
 
 const prefix = '!';
 
 //To add characters to the rolls, need to add to this character array and also in risk_rolls.json
-let survivors = ['commando', 'huntress', 'bandit', 'mul_t', 'engineer', 'artificer', 'mercenary', 'rex', 'loader', 'acrid', 'captain', 'railgunner', 'voidfiend'];
+const survivors = ['commando', 'huntress', 'bandit', 'mul_t', 'engineer', 'artificer', 'mercenary', 'rex', 'loader', 'acrid', 'captain', 'railgunner', 'voidfiend'];
 
 ///////////////////////////////////////////////
 ///////////////    CRON JOBS    ///////////////
@@ -31,14 +41,14 @@ let survivors = ['commando', 'huntress', 'bandit', 'mul_t', 'engineer', 'artific
 // zone
 ///////////////////////////////////////////////
 
-let dailyDogPic = new cron.CronJob(cronTime._10am, () => {
+const dailyDogPic = new cron.CronJob(cronTime._10am, () => {
     const guild = getGuild(config.serverID);
     const channel = getChannel(guild, config.channelIDs.dogPics);
     channel.send('Your Daily Dog pic!');
     dogPic().then(pic => channel.send(pic));
 });
 
-let lastOnlineJob = new cron.CronJob(cronTime.everyHour, () => {
+const lastOnlineJob = new cron.CronJob(cronTime.everyHour, () => {
 
     let now = new Date().toLocaleTimeString('en-US',
     {timeZone:'UTC',hour12:true,hour:'numeric',minute:'numeric'}
@@ -52,7 +62,7 @@ let lastOnlineJob = new cron.CronJob(cronTime.everyHour, () => {
     
 });
 
-let getGMETickerJob = new cron.CronJob(cronTime.weekdays6PM, async () =>{
+const getGMETickerJob = new cron.CronJob(cronTime.weekdays6PM, async () =>{
     let symbol = 'GME';
     let ticker = await getTicker(symbol);
     const guild = getGuild(config.serverID);
@@ -68,8 +78,8 @@ let getGMETickerJob = new cron.CronJob(cronTime.weekdays6PM, async () =>{
 //     getRandomQuoteForServer(channel);
 // });
 
-//Everyday at noon, check if there is a birthday coming up. 0 16 * * * -noon
-let birthdayReminder = new cron.CronJob(cronTime.noon, () => {
+//Everyday at noon, check if there is a birthday coming up.
+const birthdayReminder = new cron.CronJob(cronTime.noon , () => {
     
     delete require.cache[require.resolve('./birthdays.json')]
     birthdaysJson = require('./birthdays.json');
@@ -77,26 +87,33 @@ let birthdayReminder = new cron.CronJob(cronTime.noon, () => {
     const today = new Date();
 
     Object.keys(birthdaysJson).forEach(function (key) {
-        if (key != 'comingUpBirthdays') {
+        //check each birthday
+        if (key !== 'comingUpBirthdays') {
             const birthday = new Date(birthdaysJson[key]);
+            birthday.setFullYear(today.getFullYear());
+            //Is the birthday coming up (in 7 days or less) and is it not in the list already
             if (birthdayComingUp(today, birthday) && !birthdaysJson.comingUpBirthdays.includes(key)) {
-                //update birthdays 
+                //Add the birthday to the upcoming birthdays list
                 birthdaysJson.comingUpBirthdays.push(key);
                 fs.writeFileSync('./birthdays.json', JSON.stringify(birthdaysJson, null, 2), function (err) {
                     if (err) throw err;
                 }
                 );
- 
-                const guild = getGuild(config.severID);
+                //Message the chat of the upcoming birthday
+                const guild = getGuild(config.serverID);
                 const channel = getChannel(guild, config.channelIDs.main);
                 channel.send(capitalizeFirstLetter(key) + '\'s birthday is coming up! ' + (birthday.getMonth()+1) + '/' + birthday.getDate());
             }
+            //If the birthday is in the past, check to see if it is in the list of upcoming birthdays and then remove it.
             if (pastBirthday(today, birthday)) {
-                birthdaysJson.comingUpBirthdays.pop(key);
-                fs.writeFileSync('./birthdays.json', JSON.stringify(birthdaysJson, null, 2), function (err) {
-                    if (err) throw err;
+                let birthdayToRemove =  birthdaysJson.comingUpBirthdays.indexOf(key);
+                if(birthdayToRemove > -1){
+                   birthdaysJson.comingUpBirthdays.splice(birthdayToRemove, 1);
+                    fs.writeFileSync('./birthdays.json', JSON.stringify(birthdaysJson, null, 2), function (err) {
+                       if (err) throw err;
+                  }
+                  );
                 }
-                );
             }
         }
     });
@@ -146,6 +163,12 @@ function doCommand(args, m) {
             m.channel.send("Doggy!");
             dogPic().then(pic => m.channel.send(pic));
             break;
+        case 'query':
+            query(m_query);
+            break;
+        case 'member':
+            m.channel.send(String(members[0].MEMBER_ID));
+            break;
         case 'uptime':
             let uptime = getUptime();
             m.channel.send(uptime);
@@ -166,11 +189,11 @@ function doCommand(args, m) {
             getLastRoll(m);
             break;
         case 'quote':
-            if ('get' == args[1]) {
+            if ('get' === args[1]) {
                 getRandomQuote(args[2], m);
             }
             else {
-                if(args[1] == undefined) {
+                if(args[1] === undefined) {
                     m.channel.send('Don\'t save an empty quote or use !quote get.');
                 }
                 else{
@@ -200,34 +223,26 @@ async function getStockTickerInfo(symbol, member){
     }
 }
 
-//Returns if there is a bithday coming up within a week
+//Returns if there is a birthday coming up within a week
 function birthdayComingUp(today, birthday){
-    var today_ = new Date(today);
-    var birthday_ = new Date(birthday);
-    today.setFullYear(today_.getFullYear());
-    birthday_.setFullYear(today_.getFullYear());
 
     // To calculate the time difference of two dates
-    var timeDifference = birthday_.getTime() - today_.getTime();
-  
+    const timeDifference = birthday.getTime() - today.getTime();
+
     // To calculate the no. of days between two dates
-    var daysDifference = timeDifference / (1000 * 3600 * 24);
+    const daysDifference = timeDifference / (1000 * 3600 * 24);
 
     return daysDifference <= 7 && daysDifference >= 0;
 }
 
 //Returns if a birthday has been passed
 function pastBirthday(today, birthday){
-    var today_ = new Date(today);
-    var birthday_ = new Date(birthday);
-    today.setFullYear(today_.getFullYear());
-    birthday_.setFullYear(today_.getFullYear());
 
     // To calculate the time difference of two dates
-    var timeDifference = birthday_.getTime() - today_.getTime();
-  
+    const timeDifference = birthday.getTime() - today.getTime();
+
     // To calculate the no. of days between two dates
-    var daysDifference = timeDifference / (1000 * 3600 * 24);
+    const daysDifference = timeDifference / (1000 * 3600 * 24);
 
     return daysDifference <= 0;
 }
@@ -235,7 +250,7 @@ function pastBirthday(today, birthday){
 //Send formatted stock ticker prices to the server
 function sendTickerInfoToServer(ticker, channel){
 
-    let m = '';
+    let m;
     let open = ticker['1. open'];
     let high = ticker['2. high'];
     let low = ticker['3. low'];
@@ -244,26 +259,28 @@ function sendTickerInfoToServer(ticker, channel){
     let percentChange = ((close - open) / open * 100);
     let today = new Date();
     let padding = ' ';
-    
 
-    m = ((today.getMonth() + 1) + '/' + today.getDate()) + '\n' +
-        '```' + '|----------|------------|' + '\n' + 
-                '| Open     | ' + String(('$'+open.substring(0, open.length - 2)).padStart(10, padding))    + ' |' + '\n' +
-                '| High     | ' + String(('$'+high.substring(0, high.length - 2)).padStart(10, padding))    + ' |' + '\n' +
-                '| Low      | ' + String(('$'+low.substring(0, low.length - 2)).padStart(10, padding))      + ' |' + '\n' +
-                '| Close    | ' + String(('$'+close.substring(0, close.length - 2)).padStart(10, padding))  + ' |' + '\n' +
-                '| Volume   | ' + String(volume.padStart(10, padding))                                      + ' |' + '\n' +
-                '| % Change | ' + (String(percentChange.toFixed(2).toString() + '%').padStart(10, padding)) + ' |' + '\n' +
-                '|----------|------------|```';
-
-    channel.send(m);
+    m = ((today.getMonth() + 1) + '/' + today.getDate()) + '\n'
+    let table = new TableGenerator()
+    table.addColumns('Type','Price')
+    table.addRows(
+        ['Open',     String(('$'+open.substring(0, open.length - 2)).padStart(10, padding))],
+        ['High',     String(('$'+high.substring(0, high.length - 2)).padStart(10, padding))],
+        ['Low',      String(('$'+low.substring(0, low.length - 2)).padStart(10, padding))],
+        ['Close',    String(('$'+close.substring(0, close.length - 2)).padStart(10, padding))],
+        ['Volume',   String(volume.padStart(10, padding))],
+        ['% Change', (String(percentChange.toFixed(2).toString() + '%').padStart(10, padding))]
+    )
+    table.setSeparatorSymbol('-')
+    table.buildFullTable()
+    channel.send(m + printInCode(table.getTable()));
 }
 
 //Displays the number of rolls  
 function printRiskPlayerStatsRolls(player, m) {
 
     try {
-        if (player != undefined) {
+        if (player !== undefined) {
             player = player.toLowerCase();
         }
         switch (player) {
@@ -290,19 +307,19 @@ function printRiskPlayerStatsRolls(player, m) {
 }
 
 //Picks a random character to play and updates the JSON file to count how
-//many time each player has rolled each character
-//Also updates the the last roll field
+//many times each player has rolled each character
+//Also updates the last roll field
 function rollRiskCharacter(m) {
 
     let survivor = getRandomSurvivor();
 
-    if (m.author.username == 'itomj') {
+    if (m.author.username === 'itomj') {
         updateRiskRollsJson(survivor, riskRollsJSON.tj);
     }
-    if (m.author.username == 'Feelsbadman') {
+    if (m.author.username === 'Feelsbadman') {
         updateRiskRollsJson(survivor, riskRollsJSON.noah);
     }
-    if (m.author.username == 'CallMe_Mikey') {
+    if (m.author.username === 'CallMe_Mikey') {
         updateRiskRollsJson(survivor, riskRollsJSON.mikey);
     }
     m.channel.send(capitalizeFirstLetter(survivor));
@@ -347,7 +364,7 @@ function dogPic() {
 function getTicker(ticker) {
 
     let d = new Date();
-    let url = 'https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=' + ticker + '&apikey=DVSFJCTH1FKZJE2L';
+    let url = 'https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=' + ticker + '&apikey=' + config.stockAPIKey;
     let date = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, 0) + '-' + String(d.getDate()).padStart(2, 0);
    
     return fetch(url)
@@ -384,11 +401,11 @@ function addQuoteToJson(memberID, quote) {
 }
 
 function getRandomQuoteForServer(channel){
-    let quote = '';
+    let quote;
     let listOfIDsToIgnore = ['']; //These IDs are ones we don't want to find in quotes
 
     let name = getMemberNameFromRandomID();
-    while(listOfIDsToIgnore.includes(getMemberIDFromName(name)) || quotesJSON[getMemberIDFromName(name)].length == 0){
+    while(listOfIDsToIgnore.includes(getMemberIDFromName(name)) || quotesJSON[getMemberIDFromName(name)].length === 0){
          name = getMemberNameFromRandomID();
     }
     let randomMemberID = getMemberIDFromName(name);
@@ -403,9 +420,9 @@ function getRandomQuote(memberName, m) {
     let listOfIDsToIgnore = ['410164514303115266', '668616932160831523']; //These IDs are ones we don't want to find in quotes
 
     //no member specified, get random quote
-    if (memberName == undefined) {
+    if (memberName === undefined) {
         let name = getMemberNameFromRandomID();
-        while(listOfIDsToIgnore.includes(getMemberIDFromName(name)) || quotesJSON[getMemberIDFromName(name)].length == 0){
+        while(listOfIDsToIgnore.includes(getMemberIDFromName(name)) || quotesJSON[getMemberIDFromName(name)].length === 0){
             name = getMemberNameFromRandomID();
         }
         let randomMemberID = getMemberIDFromName(name);
@@ -415,7 +432,7 @@ function getRandomQuote(memberName, m) {
     }
     else {
         let memberID = getMemberIDFromName(memberName.toLowerCase());
-        if (memberID != undefined) {
+        if (memberID !== undefined) {
             quote = getQuoteFromRandomMemberID(memberID);
             quote += ('\n' + '- Added by: ' + capitalizeFirstLetter(getMemberNameFromID(memberID)));
             m.channel.send(quote);
@@ -430,7 +447,7 @@ function getRandomQuote(memberName, m) {
 function getRiskLoadout(survivor, m) {
 
     try {
-        if (survivor == undefined) {
+        if (survivor === undefined) {
             survivor = getRandomSurvivor();
         }
 
@@ -439,8 +456,7 @@ function getRiskLoadout(survivor, m) {
 
         let msg;
 
-        if ('mul-t' == survivor) {
-            survivor = 'mul_t';
+        if ('mul_t' === survivor) {
             msg = '``` ' + 'MUL-T' + '\n' +
                 'Misc: '      + riskLoadouts[survivor].misc[getNumber(0, riskLoadouts[survivor].misc.length - 1, null)] + '\n' +
                 'Primary 1: ' + riskLoadouts[survivor].primary[getNumber(0, riskLoadouts[survivor].primary.length - 1, null)] + '\n' +
@@ -451,7 +467,7 @@ function getRiskLoadout(survivor, m) {
 
             survivorPrint = 'mul_t';
         }
-        else if ('captain' == survivor) {
+        else if ('captain' === survivor) {
             msg = '``` '      + survivorPrint + '\n' +
                 'Misc: '      + riskLoadouts[survivor].misc[getNumber(0, riskLoadouts[survivor].misc.length - 1, null)] + '\n' +
                 'Primary: '   + riskLoadouts[survivor].primary[getNumber(0, riskLoadouts[survivor].primary.length - 1, null)] + '\n' +
@@ -469,16 +485,16 @@ function getRiskLoadout(survivor, m) {
                 'Special: '   + riskLoadouts[survivor].special[getNumber(0, riskLoadouts[survivor].special.length - 1, null)] + '```';
         }
 
-        if (m.author.username == 'itomj') {
+        if (m.author.username === 'itomj') {
             updateRiskRollsJson(survivorPrint, riskRollsJSON.tj);
         }
-        if (m.author.username == 'Feelsbadman') {
+        if (m.author.username === 'Feelsbadman') {
             updateRiskRollsJson(survivorPrint, riskRollsJSON.noah);
         }
-        if (m.author.username == 'DJ Enerate') {
+        if (m.author.username === 'DJ Enerate') {
             updateRiskRollsJson(survivorPrint, riskRollsJSON.matt);
         }
-        if (m.author.username == 'CallMe_Mikey') {
+        if (m.author.username === 'CallMe_Mikey') {
             updateRiskRollsJson(survivorPrint, riskRollsJSON.mikey);
         }
         m.channel.send(msg);
@@ -513,20 +529,20 @@ function getUptime() {
 
 //Gets the last Survivor a player rolled
 function getLastRoll(m) {
-    if (m.author.username == 'itomj') {
+    if (m.author.username === 'itomj') {
         m.channel.send(capitalizeFirstLetter(riskRollsJSON.tj.last));
     }
-    if (m.author.username == 'Feelsbadman') {
+    if (m.author.username === 'Feelsbadman') {
         m.channel.send(capitalizeFirstLetter(riskRollsJSON.noah.last));
     }
-    if (m.author.username == 'CallMe_Mikey') {
+    if (m.author.username === 'CallMe_Mikey') {
         m.channel.send(capitalizeFirstLetter(riskRollsJSON.mikey.last));
     }
 }
 
 //Capitalizes the first character of a string
 function capitalizeFirstLetter(string) {
-    if(string == 'tj'){
+    if(string === 'tj'){
         return 'TJ';
     }
     return string.charAt(0).toUpperCase() + string.slice(1);
@@ -535,60 +551,66 @@ function capitalizeFirstLetter(string) {
 //Displays how many times a player rolled each character
 function printCharacterRolls(json, player) {
 
-    let total = 0;
+    let total;
 
-    if (player == 'tj') {
+    if (player === 'tj') {
         player = player.toUpperCase();
     } else {
         player = capitalizeFirstLetter(player);
     }
 
     total = getTotalRolls(json);
-
-    let padding = " ";
-
-    return '```| ' + player + '\n' +
-        '|------------|-----|\n' +
-        '| Commando   | ' + String(json.commando).padStart(3, padding)   + ' |\n' +
-        '| Huntress   | ' + String(json.huntress).padStart(3, padding)   + ' |\n' +
-        '| Bandit     | ' + String(json.bandit).padStart(3, padding)     + ' |\n' +
-        '| MUL-T      | ' + String(json.mul_t).padStart(3, padding)      + ' |\n' +
-        '| Engineer   | ' + String(json.engineer).padStart(3, padding)   + ' |\n' +
-        '| Artificer  | ' + String(json.artificer).padStart(3, padding)  + ' |\n' +
-        '| Mercenary  | ' + String(json.mercenary).padStart(3, padding)  + ' |\n' +
-        '| Rex        | ' + String(json.rex).padStart(3, padding)        + ' |\n' +
-        '| Loader     | ' + String(json.loader).padStart(3, padding)     + ' |\n' +
-        '| Acrid      | ' + String(json.acrid).padStart(3, padding)      + ' |\n' +
-        '| Captain    | ' + String(json.captain).padStart(3, padding)    + ' |\n' +
-        '| Railgunner | ' + String(json.railgunner).padStart(3, padding) + ' |\n' +
-        '| Void Fiend | ' + String(json.voidfiend).padStart(3, padding)  + ' |\n' +
-        '| Total      | ' + String(total).padStart(3, 0)                 + ' |\n' +
-        '|------------|-----|```';
+    let table = new TableGenerator();
+    table.addColumns(player ,'   ');
+    table.addRows(
+        ['Commando',   json.commando],
+        ['Huntress',   json.huntress],
+        ['Bandit',     json.bandit],
+        ['MUL-T',      json.mul_t],
+        ['Engineer',   json.engineer],
+        ['Artificer',  json.artificer],
+        ['Mercenary',  json.mercenary],
+        ['Rex',        json.rex],
+        ['Loader',     json.loader],
+        ['Acrid',      json.acrid],
+        ['Captain',    json.captain],
+        ['Railgunner', json.railgunner],
+        ['Void Fiend', json.voidfiend],
+        ['Total',      total]
+    )
+    table.setSeparatorSymbol('-');
+    table.buildFullTable();
+    return printInCode(table.getTable())
 }
 
 //Prints all the rolls of each player
 function printAllPlayerCharacterRolls(json) {
 
-    let padding = " ";
+    let table = new TableGenerator()
+    table.addColumns('Survivor', 'TJ', 'Noah', 'Mikey')
+    table.addRows(
+        ['Commando',   json.tj.commando,   json.noah.commando,   json.mikey.commando],
+        ['Huntress',   json.tj.huntress,   json.noah.huntress,   json.mikey.huntress],
+        ['Bandit',     json.tj.bandit,     json.noah.bandit,     json.mikey.bandit],
+        ['MUL-T',      json.tj.mul_t,      json.noah.mul_t,      json.mikey.mul_t],
+        ['Engineer',   json.tj.engineer,   json.noah.engineer,   json.mikey.engineer],
+        ['Artificer',  json.tj.artificer,  json.noah.artificer,  json.mikey.artificer],
+        ['Mercenary',  json.tj.mercenary,  json.noah.mercenary,  json.mikey.mercenary],
+        ['Rex',        json.tj.rex,        json.noah.rex,        json.mikey.rex],
+        ['Loader',     json.tj.loader,     json.noah.loader,     json.mikey.loader],
+        ['Acrid',      json.tj.acrid,      json.noah.acrid,      json.mikey.acrid],
+        ['Captain',    json.tj.captain,    json.noah.captain,    json.mikey.captain],
+        ['Railgunner', json.tj.railgunner, json.noah.railgunner, json.mikey.railgunner],
+        ['Void Fiend', json.tj.voidfiend,  json.noah.voidfiend,  json.mikey.voidfiend],
+        ['Total', getTotalRolls(json.tj), getTotalRolls(json.noah), getTotalRolls(json.mikey)]
+        )
+    table.setSeparatorSymbol('-')
+    table.buildFullTable()
+    return printInCode(table.getTable())
+}
 
-    return '```' +
-        '| Survior    | TJ | Noah | Mikey |\n' +
-        '|------------|----|------|-------|\n' +
-        '| Commando   | ' + capitalizeFirstLetter(String(json.tj.commando).padStart(3, padding))   + '|' + capitalizeFirstLetter(String(json.noah.commando).padStart(6, padding))   + '|' + capitalizeFirstLetter(String(json.mikey.commando).padStart(7, padding))   + '|\n' +
-        '| Huntress   | ' + capitalizeFirstLetter(String(json.tj.huntress).padStart(3, padding))   + '|' + capitalizeFirstLetter(String(json.noah.huntress).padStart(6, padding))   + '|' + capitalizeFirstLetter(String(json.mikey.huntress).padStart(7, padding))   + '|\n' +
-        '| Bandit     | ' + capitalizeFirstLetter(String(json.tj.bandit).padStart(3, padding))     + '|' + capitalizeFirstLetter(String(json.noah.bandit).padStart(6, padding))     + '|' + capitalizeFirstLetter(String(json.mikey.bandit).padStart(7, padding))     + '|\n' +
-        '| MUL-T      | ' + capitalizeFirstLetter(String(json.tj.mul_t).padStart(3, padding))      + '|' + capitalizeFirstLetter(String(json.noah.mul_t).padStart(6, padding))      + '|' + capitalizeFirstLetter(String(json.mikey.mul_t).padStart(7, padding))      + '|\n' +
-        '| Engineer   | ' + capitalizeFirstLetter(String(json.tj.engineer).padStart(3, padding))   + '|' + capitalizeFirstLetter(String(json.noah.engineer).padStart(6, padding))   + '|' + capitalizeFirstLetter(String(json.mikey.engineer).padStart(7, padding))   + '|\n' +
-        '| Artificer  | ' + capitalizeFirstLetter(String(json.tj.artificer).padStart(3, padding))  + '|' + capitalizeFirstLetter(String(json.noah.artificer).padStart(6, padding))  + '|' + capitalizeFirstLetter(String(json.mikey.artificer).padStart(7, padding))  + '|\n' +
-        '| Mercenary  | ' + capitalizeFirstLetter(String(json.tj.mercenary).padStart(3, padding))  + '|' + capitalizeFirstLetter(String(json.noah.mercenary).padStart(6, padding))  + '|' + capitalizeFirstLetter(String(json.mikey.mercenary).padStart(7, padding))  + '|\n' +
-        '| Rex        | ' + capitalizeFirstLetter(String(json.tj.rex).padStart(3, padding))        + '|' + capitalizeFirstLetter(String(json.noah.rex).padStart(6, padding))        + '|' + capitalizeFirstLetter(String(json.mikey.rex).padStart(7, padding))        + '|\n' +
-        '| Loader     | ' + capitalizeFirstLetter(String(json.tj.loader).padStart(3, padding))     + '|' + capitalizeFirstLetter(String(json.noah.loader).padStart(6, padding))     + '|' + capitalizeFirstLetter(String(json.mikey.loader).padStart(7, padding))     + '|\n' +
-        '| Acrid      | ' + capitalizeFirstLetter(String(json.tj.acrid).padStart(3, padding))      + '|' + capitalizeFirstLetter(String(json.noah.acrid).padStart(6, padding))      + '|' + capitalizeFirstLetter(String(json.mikey.acrid).padStart(7, padding))      + '|\n' +
-        '| Captain    | ' + capitalizeFirstLetter(String(json.tj.captain).padStart(3, padding))    + '|' + capitalizeFirstLetter(String(json.noah.captain).padStart(6, padding))    + '|' + capitalizeFirstLetter(String(json.mikey.captain).padStart(7, padding))    + '|\n' +
-        '| Railgunner | ' + capitalizeFirstLetter(String(json.tj.railgunner).padStart(3, padding)) + '|' + capitalizeFirstLetter(String(json.noah.railgunner).padStart(6, padding)) + '|' + capitalizeFirstLetter(String(json.mikey.railgunner).padStart(7, padding)) + '|\n' +
-        '| Void Fiend | ' + capitalizeFirstLetter(String(json.tj.voidfiend).padStart(3, padding))  + '|' + capitalizeFirstLetter(String(json.noah.voidfiend).padStart(6, padding))  + '|' + capitalizeFirstLetter(String(json.mikey.voidfiend).padStart(7, padding))  + '|\n' +
-        '| Total      | ' + String(getTotalRolls(json.tj)).padStart(3, padding)                    + '|' + String(getTotalRolls(json.noah)).padStart(6, padding)                    + '|' + String(getTotalRolls(json.mikey)).padStart(7, padding)                    + '|\n' +
-        '|------------|----|------|-------|```';
+function printInCode(str){
+    return '```' + str + '```'
 }
 
 //Counts the total rolls
@@ -596,7 +618,7 @@ function getTotalRolls(json) {
     let total = 0;
 
     for (const [key, value] of Object.entries(json)) {
-        if (key != 'last') {
+        if (key !== 'last') {
             total += value;
         }
     }
@@ -606,7 +628,7 @@ function getTotalRolls(json) {
 //Updates the JSON file that keeps track of the character rolls
 function updateRiskRollsJson(survivor, memberJSON) {
 
-    if ('mul-t' == survivor) {
+    if ('mul-t' === survivor) {
         memberJSON['mul_t']++;
     }
     else {
@@ -620,28 +642,31 @@ function updateRiskRollsJson(survivor, memberJSON) {
     );
 }
 
-//Displays all of the commands
+//Displays all the commands
 function printCommands(m) {
 
-    let cmd = '```| Commands              | Description                                                                           |\n' +
-        '|-----------------------|---------------------------------------------------------------------------------------|\n' +
-        '| !dog                  | Get a random picture of a dog :).                                                     |\n' +
-        '| !number               | Get a random number between 0 and 1M.                                                 |\n' +
-        '| !number <min> <max>   | Get a random number in the range.                                                     |\n' +
-        '| !risk                 | Picks a random Risk of Rain 2 Survivor.                                               |\n' +
-        '| !loadout              | Picks a random Risk of Rain 2 Survivor and loadout.                                   |\n' +
-        '| !loadout <survivor>   | Generates a loadout for the Survivor.                                                 |\n' +
-        '| !stats                | Gets the number of all players Survivor rolls in Risk of Rain 2 for a specifc player. |\n' +
-        '| !stats <person>       | Gets the number of Survivor rolls in Risk of Rain 2.                                  |\n' +
-        '| !last                 | Gets the last Survivor you rolled.                                                    |\n' +
-        '| !quote <quote to add> | Adds a quote to be remembered.                                                        |\n' +
-        '| !quote get            | Gets a random quote from a random member.                                             |\n' +
-        '| !quote get <person>   | Gets a random quote from a specific member.                                           |\n' +
-        '| !stock <symbol>       | Gets stock prices for the day of the given symbol.                                    |\n' +
-        '| !uptime               | Time that the R.A.M.I.S has been online.                                              |\n' +
-        '|-----------------------|---------------------------------------------------------------------------------------|\n```';
-
-    m.channel.send(cmd);
+    let table = new TableGenerator()
+    table.addColumns('Commands', 'Description')
+    table.addRows(
+        ['!dog',                  'Get a random picture of a dog :).'],
+        ['!number',               'Get a random number between 0 and 1M.'],
+        ['!number <min> <max>',   'Get a random number in the range.'],
+        ['!risk',                 'Picks a random Risk of Rain 2 Survivor.'],
+        ['!loadout',              'Picks a random Risk of Rain 2 Survivor and load-out.'],
+        ['!loadout <survivor>',   'Generates a load-out for the Survivor.'],
+        ['!stats',                'Gets the number of all players Survivor rolls in Risk of Rain 2 for a specific player.'],
+        ['!stats <person>',       'Gets the number of Survivor rolls in Risk of Rain 2.'],
+        ['!last',                 'Gets the last Survivor you rolled.'],
+        ['!quote <quote to add>', 'Adds a quote to be remembered.'],
+        ['!quote get',            'Gets a random quote from a random member.'],
+        ['!quote get <person>',   'Gets a random quote from a specific member.'],
+        ['!stock <symbol>',       'Gets stock prices for the day of the given symbol.'],
+        ['!uptime',               'Time that the R.A.M.I.S has been online.']
+    )
+    table.setSeparatorSymbol('-')
+    table.removeRow(0)
+    table.buildFullTable()
+    m.channel.send(printInCode(table.getTable()));
 }
 
 function randomWelcomeMessage(m) {
@@ -672,7 +697,7 @@ function botOnline(){
 
 client.on('guildMemberAdd', member => {
     const guild = getGuild(member.guild.id);
-    if (guild == config.serverID) {
+    if (guild === config.serverID) {
         const channel = getChannel(guild, config.channelIDs.main);
         channel.send(randomWelcomeMessage(member));
     }
